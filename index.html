@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PyHIDS — Dashboard</title>
+  <!-- Auto-refresh every 10 seconds so new alerts appear without manual reload -->
+  <meta http-equiv="refresh" content="10">
+  <style>
+    /* ── Reset & Base ── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    .shell { display: flex; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 200px;
+      background: #1a1d27;
+      border-right: 1px solid #2d3148;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: fixed;
+      height: 100vh;
+    }
+    .brand {
+      padding: 20px 16px 16px;
+      border-bottom: 1px solid #2d3148;
+    }
+    .brand h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+    .brand p {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 3px;
+    }
+    .nav { padding: 8px 0; flex: 1; }
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      font-size: 13px;
+      color: #94a3b8;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav a:hover { background: #252840; color: #e2e8f0; }
+    .nav a.active {
+      background: #252840;
+      color: #fff;
+      font-weight: 500;
+      border-left: 2px solid #6366f1;
+      padding-left: 14px;
+    }
+    .nav-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-red    { background: #ef4444; }
+    .dot-amber  { background: #f59e0b; }
+    .dot-blue   { background: #3b82f6; }
+    .dot-gray   { background: #475569; }
+
+    /* Agent status at bottom of sidebar */
+    .agent-status {
+      padding: 12px 16px;
+      border-top: 1px solid #2d3148;
+      font-size: 11px;
+    }
+    .agent-status .label { color: #64748b; margin-bottom: 3px; }
+    .agent-status .host  { color: #94a3b8; font-size: 12px; }
+    .online { color: #22c55e; }
+    .pulse {
+      display: inline-block;
+      width: 6px; height: 6px;
+      background: #22c55e;
+      border-radius: 50%;
+      margin-right: 4px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Main Content ── */
+    .main {
+      margin-left: 200px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      padding: 16px 24px;
+      border-bottom: 1px solid #2d3148;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1a1d27;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar h2 { font-size: 15px; font-weight: 500; color: #fff; }
+    .topbar p  { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .badge-live {
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #14532d;
+      color: #86efac;
+      font-weight: 500;
+    }
+
+    /* ── Content Scroll Area ── */
+    .content { padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* ── Metric Cards ── */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .metric {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .metric .label {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .metric .value {
+      font-size: 28px;
+      font-weight: 600;
+    }
+    .metric.crit .value { color: #ef4444; }
+    .metric.warn .value { color: #f59e0b; }
+    .metric.info .value { color: #60a5fa; }
+    .metric.ok   .value { color: #22c55e; }
+
+    /* ── Section Label ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Alert List ── */
+    .alert-list { display: flex; flex-direction: column; gap: 8px; }
+    .alert-row {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      border-left-width: 3px;
+    }
+    .alert-row.CRITICAL { border-left-color: #ef4444; }
+    .alert-row.WARNING  { border-left-color: #f59e0b; }
+    .alert-row.INFO     { border-left-color: #3b82f6; }
+
+    .sev-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+    .sev-CRITICAL { background: #450a0a; color: #fca5a5; }
+    .sev-WARNING  { background: #451a03; color: #fcd34d; }
+    .sev-INFO     { background: #0c1a3a; color: #93c5fd; }
+
+    .alert-body { flex: 1; }
+    .alert-title { font-weight: 500; color: #e2e8f0; line-height: 1.4; }
+    .alert-desc  { font-size: 12px; color: #64748b; margin-top: 3px; line-height: 1.5; }
+    .alert-meta  { font-size: 11px; color: #475569; margin-top: 4px; }
+    .alert-time  {
+      font-size: 11px;
+      color: #475569;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+
+    /* ── Empty State ── */
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: #475569;
+      font-size: 14px;
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>PyHIDS</h1>
+        <p>Host Intrusion Detection</p>
+      </div>
+      <nav class="nav">
+        <a href="/" class="active">
+          <span class="nav-dot dot-red"></span> Alert feed
+        </a>
+        <a href="/fim">
+          <span class="nav-dot dot-amber"></span> File integrity
+        </a>
+        <a href="/logs">
+          <span class="nav-dot dot-blue"></span> Log monitor
+        </a>
+      </nav>
+      <div class="agent-status">
+        <div class="label">Agent</div>
+        <div class="host">DESKTOP-WIN11</div>
+        <div class="online" style="margin-top:5px; font-size:11px;">
+          <span class="pulse"></span>Online
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main">
+      <div class="topbar">
+        <div>
+          <h2>Alert feed</h2>
+          <p>Auto-refreshes every 10 seconds</p>
+        </div>
+        <span class="badge-live">● Live</span>
+      </div>
+
+      <div class="content">
+
+        <!-- Metric cards -->
+        <div class="metric-grid">
+          <div class="metric crit">
+            <div class="label">Critical</div>
+            <div class="value">{{ counts.CRITICAL }}</div>
+          </div>
+          <div class="metric warn">
+            <div class="label">Warnings</div>
+            <div class="value">{{ counts.WARNING }}</div>
+          </div>
+          <div class="metric info">
+            <div class="label">Info</div>
+            <div class="value">{{ counts.INFO }}</div>
+          </div>
+          <div class="metric ok">
+            <div class="label">Resolved</div>
+            <div class="value">{{ counts.RESOLVED }}</div>
+          </div>
+        </div>
+
+        <!-- Alert list -->
+        <div class="section-label">Recent alerts</div>
+
+        {% if alerts %}
+          <div class="alert-list">
+            {% for alert in alerts %}
+            <div class="alert-row {{ alert.severity }}">
+              <span class="sev-badge sev-{{ alert.severity }}">{{ alert.severity }}</span>
+              <div class="alert-body">
+                <div class="alert-title">{{ alert.title }}</div>
+                <div class="alert-desc">{{ alert.description }}</div>
+                <div class="alert-meta">Module: {{ alert.module }} · Host: {{ alert.host }}</div>
+              </div>
+              <div class="alert-time">{{ alert.timestamp }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty">
+            No alerts yet. Run the FIM or log monitor to start detecting events.
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
