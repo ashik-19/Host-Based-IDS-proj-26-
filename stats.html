@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PyHIDS — Statistics</title>
+  <meta http-equiv="refresh" content="30">
+  <style>
+    .dot-purple { background: #a855f7; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117; color: #e2e8f0; min-height: 100vh;
+    }
+    .shell { display: flex; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 200px; background: #1a1d27;
+      border-right: 1px solid #2d3148;
+      display: flex; flex-direction: column;
+      position: fixed; height: 100vh; z-index: 20;
+    }
+    .brand { padding: 20px 16px 16px; border-bottom: 1px solid #2d3148; }
+    .brand h1 { font-size: 16px; font-weight: 600; color: #fff; }
+    .brand p  { font-size: 11px; color: #64748b; margin-top: 3px; }
+    .nav { padding: 8px 0; flex: 1; }
+    .nav a {
+      display: flex; align-items: center; gap: 8px; padding: 9px 16px;
+      font-size: 13px; color: #94a3b8; text-decoration: none; transition: background .15s;
+    }
+    .nav a:hover { background: #252840; color: #e2e8f0; }
+    .nav a.active {
+      background: #252840; color: #fff; font-weight: 500;
+      border-left: 2px solid #a855f7; padding-left: 14px;
+    }
+    .nav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .dot-red    { background: #ef4444; }
+    .dot-amber  { background: #f59e0b; }
+    .dot-blue   { background: #3b82f6; }
+    .dot-purple { background: #a855f7; }
+    .agent-status { padding: 12px 16px; border-top: 1px solid #2d3148; font-size: 11px; }
+    .agent-status .label { color: #64748b; margin-bottom: 3px; }
+    .agent-status .host  { color: #94a3b8; font-size: 12px; }
+    .pulse {
+      display: inline-block; width: 6px; height: 6px; background: #22c55e;
+      border-radius: 50%; margin-right: 4px; animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── Main ── */
+    .main { margin-left: 200px; flex: 1; }
+    .topbar {
+      padding: 14px 24px; border-bottom: 1px solid #2d3148;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #1a1d27; position: sticky; top: 0; z-index: 10;
+    }
+    .topbar h2 { font-size: 15px; font-weight: 500; color: #fff; }
+    .topbar p  { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .badge-live {
+      font-size: 10px; padding: 4px 10px; border-radius: 999px;
+      background: #2d1f4f; color: #c084fc; font-weight: 500;
+    }
+    .content { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+    .section-label {
+      font-size: 11px; font-weight: 500; color: #64748b;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+
+    /* ── Top metric row ── */
+    .metric-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+    .metric {
+      background: #1a1d27; border: 1px solid #2d3148;
+      border-radius: 10px; padding: 16px;
+    }
+    .metric .label { font-size: 11px; color: #64748b; text-transform: uppercase;
+                     letter-spacing:.05em; margin-bottom:8px; }
+    .metric .value { font-size: 28px; font-weight: 600; }
+    .metric .sub   { font-size: 11px; color: #475569; margin-top: 4px; }
+    .metric.crit .value { color: #ef4444; }
+    .metric.warn .value { color: #f59e0b; }
+    .metric.info .value { color: #60a5fa; }
+    .metric.ok   .value { color: #22c55e; }
+
+    /* ── Timeline Chart ── */
+    .chart-card {
+      background: #1a1d27; border: 1px solid #2d3148;
+      border-radius: 10px; padding: 20px;
+    }
+    .chart-card h3 {
+      font-size: 12px; font-weight: 600; color: #64748b;
+      text-transform: uppercase; letter-spacing:.05em; margin-bottom: 16px;
+    }
+    .chart-area {
+      display: flex; align-items: flex-end; gap: 6px;
+      height: 140px; padding-bottom: 28px; position: relative;
+    }
+    /* horizontal grid lines */
+    .chart-area::before {
+      content: ''; position: absolute; left: 0; right: 0;
+      top: 0; bottom: 28px;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent, transparent calc(33.33% - 0.5px),
+        #2d3148 calc(33.33% - 0.5px), #2d3148 33.33%
+      );
+      pointer-events: none;
+    }
+    .bar-wrap {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; gap: 4px; height: 100%; justify-content: flex-end;
+    }
+    .bar {
+      width: 100%; border-radius: 3px 3px 0 0;
+      background: linear-gradient(to top, #6366f1, #818cf8);
+      transition: height .3s ease; min-height: 2px; position: relative;
+    }
+    .bar:hover { background: linear-gradient(to top, #7c3aed, #a78bfa); }
+    .bar-count {
+      position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+      font-size: 9px; color: #94a3b8; white-space: nowrap;
+    }
+    .bar-label {
+      font-size: 9px; color: #475569; text-align: center;
+      margin-top: 4px; white-space: nowrap;
+    }
+
+    /* ── Two-column grid ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+    /* ── Stat card ── */
+    .stat-card {
+      background: #1a1d27; border: 1px solid #2d3148;
+      border-radius: 10px; padding: 16px;
+    }
+    .stat-card h3 {
+      font-size: 11px; font-weight: 600; color: #64748b;
+      text-transform: uppercase; letter-spacing:.05em; margin-bottom: 12px;
+    }
+    .stat-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 0; border-bottom: 1px solid #1e2235; font-size: 12px;
+    }
+    .stat-item:last-child { border-bottom: none; }
+    .stat-item .key { color: #94a3b8; }
+    .stat-count {
+      font-weight: 600; background: #252840; padding: 2px 8px;
+      border-radius: 4px; color: #e2e8f0; font-size: 12px;
+    }
+
+    /* ── Progress bars ── */
+    .prog-wrap { display: flex; flex-direction: column; gap: 10px; }
+    .prog-item { display: flex; flex-direction: column; gap: 4px; }
+    .prog-label {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: #94a3b8;
+    }
+    .prog-bar-bg {
+      height: 6px; background: #252840; border-radius: 3px; overflow: hidden;
+    }
+    .prog-bar { height: 100%; border-radius: 3px; transition: width .5s ease; }
+    .prog-crit { background: linear-gradient(to right, #ef4444, #f87171); }
+    .prog-warn { background: linear-gradient(to right, #f59e0b, #fbbf24); }
+    .prog-info { background: linear-gradient(to right, #3b82f6, #60a5fa); }
+    .prog-ok   { background: linear-gradient(to right, #22c55e, #4ade80); }
+
+    /* ── Host status cards ── */
+    .host-card {
+      background: #1a1d27; border: 1px solid #2d3148;
+      border-radius: 10px; padding: 16px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .host-name { font-size: 14px; font-weight: 600; color: #fff; }
+    .host-meta { font-size: 11px; color: #64748b; }
+    .host-stat {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: #94a3b8; padding: 4px 0;
+      border-bottom: 1px solid #1e2235;
+    }
+    .host-stat:last-child { border-bottom: none; }
+    .host-stat .v { font-weight: 600; color: #e2e8f0; }
+
+    /* ── System health row ── */
+    .health-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .health-card {
+      background: #1a1d27; border: 1px solid #2d3148;
+      border-radius: 10px; padding: 14px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .health-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .health-icon.green { background: #14532d; }
+    .health-icon.red   { background: #450a0a; }
+    .health-icon.amber { background: #451a03; }
+    .health-label { font-size: 11px; color: #64748b; margin-bottom: 2px; }
+    .health-value { font-size: 13px; font-weight: 500; color: #e2e8f0; }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand"><h1>PyHIDS</h1><p>Host Intrusion Detection</p></div>
+    <nav class="nav">
+        <a href="/stats"><span class="nav-dot dot-purple"></span> Statistics</a>
+      <a href="/"><span class="nav-dot dot-red"></span> Alert feed</a>
+      <a href="/fim"><span class="nav-dot dot-amber"></span> File integrity</a>
+      <a href="/logs"><span class="nav-dot dot-blue"></span> Log monitor</a>
+      <a href="/stats" class="active"><span class="nav-dot dot-purple"></span> Statistics</a>
+    </nav>
+    <div class="agent-status">
+      <div class="label">Agent</div>
+      <div class="host">DESKTOP-WIN11</div>
+      <div style="color:#22c55e;margin-top:5px;font-size:11px;">
+        <span class="pulse"></span>Online
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h2>Statistics &amp; Overview</h2>
+        <p>Auto-refreshes every 30 seconds · Last alert: {{ stats.last_alert }}</p>
+      </div>
+      <span class="badge-live">◈ Analytics</span>
+    </div>
+
+    <div class="content">
+
+      <!-- Metric cards -->
+      <div class="metric-grid">
+        <div class="metric crit">
+          <div class="label">Critical</div>
+          <div class="value">{{ counts.CRITICAL }}</div>
+          <div class="sub">{{ stats.active }} total active</div>
+        </div>
+        <div class="metric warn">
+          <div class="label">Warnings</div>
+          <div class="value">{{ counts.WARNING }}</div>
+          <div class="sub">Last hour: {{ stats.last_hour }}</div>
+        </div>
+        <div class="metric info">
+          <div class="label">Info</div>
+          <div class="value">{{ counts.INFO }}</div>
+          <div class="sub">{{ stats.total_logs }} log events</div>
+        </div>
+        <div class="metric ok">
+          <div class="label">Resolved</div>
+          <div class="value">{{ counts.RESOLVED }}</div>
+          <div class="sub">{{ stats.total_fim }} FIM events</div>
+        </div>
+      </div>
+
+      <!-- Timeline chart -->
+      {% set max_count = hourly | map(attribute='count') | max | default(1) %}
+      {% set max_count = max_count if max_count > 0 else 1 %}
+      <div class="chart-card">
+        <h3>Alert timeline — last 12 hours</h3>
+        <div class="chart-area">
+          {% for bucket in hourly %}
+          <div class="bar-wrap">
+            {% set pct = (bucket.count / max_count * 100) | int %}
+            {% set pct = pct if pct > 0 else 0 %}
+            <div class="bar" style="height: {{ pct }}%;">
+              {% if bucket.count > 0 %}
+              <span class="bar-count">{{ bucket.count }}</span>
+              {% endif %}
+            </div>
+            <div class="bar-label">{{ bucket.label }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Severity distribution + Module breakdown -->
+      <div class="two-col">
+        <div class="stat-card">
+          <h3>Severity distribution</h3>
+          {% set total = counts.CRITICAL + counts.WARNING + counts.INFO %}
+          {% set total = total if total > 0 else 1 %}
+          <div class="prog-wrap" style="margin-bottom:8px;">
+            <div class="prog-item">
+              <div class="prog-label">
+                <span>Critical</span>
+                <span>{{ counts.CRITICAL }} ({{ ((counts.CRITICAL / total) * 100) | int }}%)</span>
+              </div>
+              <div class="prog-bar-bg">
+                <div class="prog-bar prog-crit"
+                     style="width: {{ ((counts.CRITICAL / total) * 100) | int }}%"></div>
+              </div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-label">
+                <span>Warning</span>
+                <span>{{ counts.WARNING }} ({{ ((counts.WARNING / total) * 100) | int }}%)</span>
+              </div>
+              <div class="prog-bar-bg">
+                <div class="prog-bar prog-warn"
+                     style="width: {{ ((counts.WARNING / total) * 100) | int }}%"></div>
+              </div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-label">
+                <span>Info</span>
+                <span>{{ counts.INFO }} ({{ ((counts.INFO / total) * 100) | int }}%)</span>
+              </div>
+              <div class="prog-bar-bg">
+                <div class="prog-bar prog-info"
+                     style="width: {{ ((counts.INFO / total) * 100) | int }}%"></div>
+              </div>
+            </div>
+            <div class="prog-item">
+              <div class="prog-label">
+                <span>Resolved</span>
+                <span>{{ counts.RESOLVED }}</span>
+              </div>
+              <div class="prog-bar-bg">
+                <div class="prog-bar prog-ok"
+                     style="width: {{ ([((counts.RESOLVED / total) * 100) | int, 100] | min) }}%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <h3>Alerts by module</h3>
+          {% for module, count in stats.by_module.items() %}
+          <div class="stat-item">
+            <span class="key">{{ module }}</span>
+            <span class="stat-count">{{ count }}</span>
+          </div>
+          {% else %}
+          <div style="color:#475569; font-size:12px; padding:8px 0;">
+            No alerts yet — run the simulator to populate data.
+          </div>
+          {% endfor %}
+          <div style="margin-top:12px; padding-top:12px; border-top:1px solid #2d3148;">
+            <div class="stat-item">
+              <span class="key" style="color:#64748b;">Total FIM events</span>
+              <span class="stat-count">{{ stats.total_fim }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="key" style="color:#64748b;">Total log events</span>
+              <span class="stat-count">{{ stats.total_logs }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Host status cards -->
+      <div class="section-label">Host status</div>
+      <div class="two-col">
+        {% for host, count in stats.by_host.items() %}
+        <div class="host-card">
+          <div>
+            <div class="host-name">
+              {% if 'debian' in host.lower() or 'linux' in host.lower() %}
+              🐧 {{ host }}
+              {% else %}
+              🖥 {{ host }}
+              {% endif %}
+            </div>
+            <div class="host-meta">
+              {% if 'debian' in host.lower() %}
+              Debian VM · Remote agent
+              {% else %}
+              Windows Manager · Local monitoring
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <div class="host-stat">
+              <span>Total alerts</span>
+              <span class="v">{{ count }}</span>
+            </div>
+            <div class="host-stat">
+              <span>Status</span>
+              <span class="v" style="color:#22c55e;">● Online</span>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <div class="host-card">
+          <div class="host-name">🖥 DESKTOP-WIN11</div>
+          <div class="host-meta">Windows Manager · Local monitoring</div>
+          <div class="host-stat"><span>Status</span><span class="v" style="color:#22c55e;">● Online</span></div>
+        </div>
+        <div class="host-card">
+          <div class="host-name">🐧 debian-vm</div>
+          <div class="host-meta">Debian VM · Remote agent</div>
+          <div class="host-stat"><span>Status</span><span class="v" style="color:#f59e0b;">● Waiting</span></div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- System health -->
+      <div class="section-label">System health</div>
+      <div class="health-grid">
+        <div class="health-card">
+          <div class="health-icon green">🛡</div>
+          <div>
+            <div class="health-label">FIM Monitor</div>
+            <div class="health-value">Active — {{ stats.total_fim }} events logged</div>
+          </div>
+        </div>
+        <div class="health-card">
+          <div class="health-icon green">📋</div>
+          <div>
+            <div class="health-label">Log Monitor</div>
+            <div class="health-value">Active — {{ stats.total_logs }} lines processed</div>
+          </div>
+        </div>
+        <div class="health-card">
+          <div class="health-icon {% if stats.active > 0 %}amber{% else %}green{% endif %}">
+            {% if stats.active > 0 %}⚠{% else %}✓{% endif %}
+          </div>
+          <div>
+            <div class="health-label">Active alerts</div>
+            <div class="health-value">
+              {% if stats.active > 0 %}
+              {{ stats.active }} unresolved alert{% if stats.active != 1 %}s{% endif %}
+              {% else %}
+              All clear — no active alerts
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dedup engine status -->
+      <div class="section-label">Alert engine status</div>
+      <div class="stat-card">
+        <h3>Deduplication engine</h3>
+        <div class="stat-item">
+          <span class="key">Active dedup keys (in-memory)</span>
+          <span class="stat-count">{{ stats.dedup_active }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="key">Alerts this session</span>
+          <span class="stat-count">{{ stats.session.get('TOTAL', 0) }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="key">Critical this session</span>
+          <span class="stat-count" style="color:#ef4444;">
+            {{ stats.session.get('CRITICAL', 0) }}
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="key">Warning this session</span>
+          <span class="stat-count" style="color:#f59e0b;">
+            {{ stats.session.get('WARNING', 0) }}
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="key">Dedup window</span>
+          <span class="stat-count">60 seconds</span>
+        </div>
+        <div class="stat-item">
+          <span class="key">Database alerts (all time)</span>
+          <span class="stat-count">
+            {{ counts.CRITICAL + counts.WARNING + counts.INFO + counts.RESOLVED }}
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
